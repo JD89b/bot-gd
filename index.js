@@ -2,8 +2,20 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 
+// Configuración adaptada para servidores Linux (Render / Nube)
 const client = new Client({
-    authStrategy: new LocalAuth()
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu'
+        ]
+    }
 });
 
 client.on('qr', (qr) => {
@@ -47,29 +59,24 @@ client.on('message_create', async (msg) => {
         }
     }
 
-if (command === '#lvlimage') {
+    if (command === '#lvlimage') {
         if (!query) return msg.reply('❌ Debes ingresar la ID o nombre del nivel.');
         try {
-            // 1. Buscamos el nivel en GDBrowser para obtener su ID exacta
             const res = await axios.get(`https://gdbrowser.com/api/search/${encodeURIComponent(query)}`);
             const lvl = res.data[0];
             if (!lvl) return msg.reply('❌ No se encontró el nivel en GD.');
 
-            // 2. URL del endpoint directo de la imagen en Level Thumbnails (Prevter)
             const thumbnailUrl = `https://levelthumbs.prevter.me/thumbnail/${lvl.id}.png`;
 
-            // Descargamos la imagen como ArrayBuffer para convertirla a Base64
             const imgRes = await axios.get(thumbnailUrl, { responseType: 'arraybuffer' });
             const base64Image = Buffer.from(imgRes.data, 'binary').toString('base64');
             
-            // Creamos el objeto de medios para WhatsApp
             const media = new MessageMedia('image/png', base64Image, `${lvl.id}.png`);
 
             await client.sendMessage(msg.from, media, {
                 caption: `🖼️ Miniatura de *${lvl.name}* (ID: ${lvl.id}) por *${lvl.author}*`
             });
         } catch (error) {
-            // Manejamos si el nivel aún no tiene miniatura subida en la base de datos de Prevter
             if (error.response && error.response.status === 404) {
                 msg.reply(`❌ El nivel no tiene una miniatura subida en Level Thumbnails aún.`);
             } else {
@@ -78,6 +85,7 @@ if (command === '#lvlimage') {
             }
         }
     }
+
     if (['#daily', '#weekly', '#event'].includes(command)) {
         const type = command.replace('#', '');
         try {
